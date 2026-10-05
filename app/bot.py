@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
 from aiogram import Bot, Dispatcher
+from aiohttp import web
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.fsm.storage.redis import RedisStorage
@@ -20,6 +22,25 @@ from app.middlewares.throttling import ThrottlingMiddleware
 from app.middlewares.user_context import UserContextMiddleware
 
 logger = logging.getLogger(__name__)
+
+
+async def start_health_server() -> web.AppRunner | None:
+    """Render web service uchun kichik HTTP server (faqat PORT berilgan bo'lsa)."""
+    port = os.getenv("PORT")
+    if not port:
+        return None
+
+    async def health(_request: web.Request) -> web.Response:
+        return web.Response(text="ok")
+
+    app = web.Application()
+    app.router.add_get("/", health)
+    app.router.add_get("/health", health)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    await web.TCPSite(runner, "0.0.0.0", int(port)).start()
+    logger.info("Health server :%s portda ishga tushdi", port)
+    return runner
 
 
 async def main() -> None:
@@ -46,6 +67,8 @@ async def main() -> None:
     dp.callback_query.outer_middleware(throttling)
     register_routers(dp)
 
+    health_runner = await start_health_server()
+
     try:
         await bot.set_my_commands([BotCommand(command="start", description="Botni ishga tushirish")])
         me = await bot.get_me()
@@ -53,6 +76,8 @@ async def main() -> None:
         await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     finally:
         logger.info("Bot to‘xtatilmoqda")
+        if health_runner is not None:
+            await health_runner.cleanup()
         await bot.session.close()
         await storage.close()
         await redis.aclose()

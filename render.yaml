@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: referalstars-bot
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    dockerCommand: sh -c "alembic upgrade head && python -m app.bot"
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: BOT_USERNAME
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: TIMEZONE
+        value: Asia/Tashkent
+      - key: LOG_LEVEL
+        value: INFO
